@@ -1,0 +1,58 @@
+# miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.ds_store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# intellij related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# vscode related
+# descomentar si tu colega usa vscode y no quieren subir su config
+#.vscode/
+
+# flutter/dart/pub related
+**/doc/api/
+**/ios/flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# symbolication related
+app.*.symbols
+
+# obfuscation related
+app.*.map.json
+
+# android studio / android related
+/android/app/debug
+/android/app/profile
+/android/app/release
+/android/.gradle/
+/android/local.properties
+
+# ios related
+/ios/pods/
+/ios/.symlinks/
+/ios/flutter/flutter.framework/
+/ios/flutter/flutter.podspec
+/ios/runner/generatedpluginregistrant.*
+
+# security / variables de entorno
+.env
+*.env
