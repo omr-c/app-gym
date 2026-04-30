@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../auth/login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -12,10 +14,13 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final String ip = "192.168.1.127";
+  final String ip = "192.168.1.68";
   Map<String, dynamic>? resumen;
   List<dynamic> datosGrafica = [];
   bool cargando = true;
+  
+  // filtro dinamico que ya funcionaba en la version de tu colega
+  String rangoSeleccionado = 'semana'; 
 
   @override
   void initState() {
@@ -23,21 +28,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _cargarDatosDashboard();
   }
 
-  // FUNCIÓN PRINCIPAL QUE TRAE LOS DATOS
+  // cierre de sesion integrado y seguro
+  Future<void> _logout(BuildContext context) async {
+    try {
+      await GoogleSignIn().signOut();
+      await FirebaseAuth.instance.signOut();
+      if (context.mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      debugPrint("error al salir: $e");
+    }
+  }
+
+  // funcion que dispara la peticion incluyendo el filtro dinamico
   Future<void> _cargarDatosDashboard() async {
+    setState(() {
+      cargando = true;
+    });
+
     try {
       final resResumen = await http.get(Uri.parse('http://$ip:8080/api/dashboard/resumen'));
-      final resGrafica = await http.get(Uri.parse('http://$ip:8080/api/dashboard/accesos-semanales'));
+      // usamos el parametro rango para que la grafica cambie segun el filtro
+      final resGrafica = await http.get(Uri.parse('http://$ip:8080/api/dashboard/accesos?rango=$rangoSeleccionado'));
 
       if (resResumen.statusCode == 200 && resGrafica.statusCode == 200) {
         setState(() {
           resumen = json.decode(resResumen.body);
           datosGrafica = json.decode(resGrafica.body);
-          cargando = false;
         });
       }
     } catch (e) {
-      debugPrint("Error Dashboard: $e");
+      debugPrint("error de conexion en dashboard: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          cargando = false;
+        });
+      }
     }
   }
 
@@ -46,52 +78,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Estadísticas Reales"),
+        title: const Text("estadisticas reales"),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _cargarDatosDashboard, // Botón manual de refresco
+            onPressed: _cargarDatosDashboard,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.red),
+            onPressed: () => _logout(context),
+            tooltip: 'cerrar sesion',
           )
         ],
       ),
-      // EL REFRESH INDICATOR PERMITE DESLIZAR HACIA ABAJO
       body: RefreshIndicator(
         onRefresh: _cargarDatosDashboard,
         child: cargando 
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(), // Obliga a que siempre se pueda deslizar
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Resumen de Membresías", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 15),
-                  Row(
+          : (resumen == null || datosGrafica.isEmpty)
+              ? ListView(
+                  children: const [
+                    SizedBox(height: 100),
+                    Center(child: Text("no hay datos o hubo un error de conexion")),
+                  ],
+                )
+              : SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildStatCard("Activos", "${resumen?['totalSociosActivos']}", Colors.green, Icons.check_circle),
-                      const SizedBox(width: 10),
-                      _buildStatCard("Deudores", "${resumen?['totalSociosPendientes']}", Colors.orange, Icons.timer),
+                      const Text("resumen de membresias", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 15),
+                      Row(
+                        children: [
+                          _buildStatCard("activos", "${resumen?['totalSociosActivos'] ?? 0}", Colors.green, Icons.check_circle),
+                          const SizedBox(width: 10),
+                          _buildStatCard("deudores", "${resumen?['totalSociosPendientes'] ?? 0}", Colors.orange, Icons.timer),
+                        ],
+                      ),
+                      const SizedBox(height: 25),
+                      const Text("ingresos en caja", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 15),
+                      Row(
+                        children: [
+                          _buildStatCard("hoy", "\$${resumen?['ingresosHoy'] ?? 0}", Colors.blue, Icons.payments),
+                          const SizedBox(width: 10),
+                          _buildStatCard("semana", "\$${resumen?['ingresosSemana'] ?? 0}", Colors.indigo, Icons.account_balance),
+                        ],
+                      ),
+                      const SizedBox(height: 30),
+                      // menu desplegable para filtrar la grafica[cite: 3]
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("afluencia", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          DropdownButton<String>(
+                            value: rangoSeleccionado,
+                            items: const [
+                              DropdownMenuItem(value: 'semana', child: Text('esta semana')),
+                              DropdownMenuItem(value: 'mes', child: Text('este mes')),
+                              DropdownMenuItem(value: 'ano', child: Text('este año')),
+                            ],
+                            onChanged: (String? nuevoValor) {
+                              if (nuevoValor != null) {
+                                setState(() {
+                                  rangoSeleccionado = nuevoValor;
+                                });
+                                _cargarDatosDashboard();
+                              }
+                            },
+                          )
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildGrafica(),
+                      const SizedBox(height: 50),
                     ],
                   ),
-                  const SizedBox(height: 25),
-                  const Text("Ingresos en Caja", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 15),
-                  Row(
-                    children: [
-                      _buildStatCard("Hoy", "\$${resumen?['ingresosHoy']}", Colors.blue, Icons.payments),
-                      const SizedBox(width: 10),
-                      _buildStatCard("Semana", "\$${resumen?['ingresosSemana']}", Colors.indigo, Icons.account_balance),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  const Text("Afluencia de la Semana", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  _buildGrafica(),
-                  const SizedBox(height: 50), // Espacio extra al final
-                ],
-              ),
-            ),
+                ),
       ),
     );
   }
@@ -111,7 +176,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 BarChartRodData(
                   toY: (entry.value['conteoAccesos'] as num).toDouble(),
                   color: Colors.blueAccent,
-                  width: 18,
+                  width: rangoSeleccionado == 'mes' ? 6 : 18, // barras mas delgadas para el mes[cite: 3]
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
                 )
               ],
@@ -124,22 +189,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 reservedSize: 30,
                 getTitlesWidget: (val, meta) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 10))
               ),
-              axisNameWidget: const Text("Personas"),
+              axisNameWidget: const Text("personas"),
               axisNameSize: 15,
             ),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
+                interval: rangoSeleccionado == 'mes' ? 5 : 1,
                 getTitlesWidget: (value, meta) {
                   int index = value.toInt();
                   if (index >= 0 && index < datosGrafica.length) {
-                    DateTime dt = DateTime.parse(datosGrafica[index]['fecha']);
-                    return Text("${dt.day}/${dt.month}", style: const TextStyle(fontSize: 9));
+                    return Text(datosGrafica[index]['fecha'].toString(), style: const TextStyle(fontSize: 9));
                   }
                   return const Text('');
                 },
               ),
-              axisNameWidget: const Text("Fechas"),
+              axisNameWidget: const Text("fechas"),
               axisNameSize: 25,
             ),
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -156,7 +221,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (datosGrafica.isEmpty) return 10;
     double max = 0;
     for (var item in datosGrafica) {
-      if (item['conteoAccesos'] > max) max = (item['conteoAccesos'] as num).toDouble();
+      if ((item['conteoAccesos'] as num).toDouble() > max) {
+        max = (item['conteoAccesos'] as num).toDouble();
+      }
     }
     return max + 2;
   }

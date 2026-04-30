@@ -3,6 +3,11 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+import 'dashboard_screen.dart';
+import '../auth/login_screen.dart';
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
@@ -14,7 +19,7 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen> {
   bool isScanning = true;
   final MobileScannerController controller = MobileScannerController();
-  final String ip = "192.168.1.127";
+  final String ip = "192.168.1.68";
   List<dynamic> historialAccesos = [];
 
   @override
@@ -23,19 +28,35 @@ class _ScannerScreenState extends State<ScannerScreen> {
     _cargarHistorial();
   }
 
+  // funcion para cerrar sesion de forma segura
+  Future<void> _logout(BuildContext context) async {
+    try {
+      await GoogleSignIn().signOut();
+      await FirebaseAuth.instance.signOut();
+      if (context.mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      debugPrint("error al salir: $e");
+    }
+  }
+
   Future<void> _cargarHistorial() async {
     try {
       final response = await http.get(Uri.parse('http://$ip:8080/api/accesos/recientes'));
       if (response.statusCode == 200) {
-        setState(() {
-          historialAccesos = json.decode(response.body);
-        });
+        setState(() => historialAccesos = json.decode(response.body));
       }
     } catch (e) {
-      debugPrint("Error al cargar historial: $e");
+      debugPrint("error al cargar historial: $e");
     }
   }
 
+  // valida el qr y decide si mostrar exito o el boton de cobro
   Future<void> validarAcceso(String qrData) async {
     if (!isScanning) return;
     setState(() => isScanning = false);
@@ -43,30 +64,33 @@ class _ScannerScreenState extends State<ScannerScreen> {
     try {
       final response = await http.post(
         Uri.parse('http://$ip:8080/api/accesos/escanear/$qrData'),
-      ).timeout(const Duration(seconds: 5));
+      );
 
       final Map<String, dynamic> data = json.decode(response.body);
-      final String? socioIdReal = data['socioId']?.toString();
       bool esExitoso = data['esExitoso'] ?? false;
       String mensaje = data['mensajeSemaforo'] ?? "ACCESO DENEGADO";
+      // el id del socio es necesario para registrar el pago
+      String? socioId = data['socioId']?.toString();
 
-      if (response.statusCode == 200 && esExitoso) {
+      if (esExitoso) {
         _mostrarResultado(mensaje, Colors.green, Icons.check_circle);
       } else {
+        // si no tiene membresia, permitimos cobrar desde aqui
         _mostrarResultado(
           mensaje, 
           Colors.red, 
-          Icons.error,
-          mostrarBotonPago: true,
-          socioId: socioIdReal ?? qrData
+          Icons.error, 
+          mostrarBotonPago: true, 
+          socioId: socioId ?? qrData
         );
       }
       _cargarHistorial();
     } catch (e) {
-      _mostrarResultado("ERROR DE CONEXIÓN", Colors.orange, Icons.wifi_off);
+      _mostrarResultado("ERROR DE CONEXION", Colors.orange, Icons.wifi_off);
     }
   }
 
+  // abre un formulario para ingresar el dinero recibido[cite: 6]
   void _mostrarFormularioPago(String socioId) {
     final TextEditingController montoController = TextEditingController();
 
@@ -79,25 +103,36 @@ class _ScannerScreenState extends State<ScannerScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom, 
+          left: 20, right: 20, top: 20
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Registrar Pago", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text("registrar pago", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             TextField(
               controller: montoController,
               keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: "Monto (\$)", border: OutlineInputBorder(), prefixText: "\$ "),
+              decoration: const InputDecoration(
+                labelText: "monto (\$)", 
+                border: OutlineInputBorder(), 
+                prefixText: "\$ "
+              ),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 55), backgroundColor: Colors.blueAccent),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 55), 
+                backgroundColor: Colors.blueAccent
+              ),
               onPressed: () {
-                if (montoController.text.isNotEmpty) _enviarPago(socioId, montoController.text);
+                if (montoController.text.isNotEmpty) {
+                  _enviarPago(socioId, montoController.text);
+                }
               },
-              child: const Text("CONFIRMAR PAGO", style: TextStyle(color: Colors.white)),
+              child: const Text("confirmar pago", style: TextStyle(color: Colors.white)),
             ),
             const SizedBox(height: 30),
           ],
@@ -106,6 +141,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
     );
   }
 
+  // envia el pago al backend para activar al socio
   Future<void> _enviarPago(String socioId, String monto) async {
     Navigator.pop(context);
     try {
@@ -121,18 +157,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        _mostrarResultado("PAGO REGISTRADO", Colors.blue, Icons.monetization_on);
+        _mostrarResultado("pago registrado", Colors.blue, Icons.monetization_on);
         _cargarHistorial();
       } else {
-        _mostrarResultado("ERROR AL PROCESAR PAGO", Colors.red, Icons.warning);
+        _mostrarResultado("error al procesar pago", Colors.red, Icons.warning);
       }
     } catch (e) {
-      _mostrarResultado("ERROR DE RED", Colors.orange, Icons.wifi_off);
+      _mostrarResultado("error de red", Colors.orange, Icons.wifi_off);
     }
   }
 
   void _mostrarResultado(String mensaje, Color color, IconData icono, {bool mostrarBotonPago = false, String? socioId}) {
-    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -148,8 +183,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
             if (mostrarBotonPago) ...[
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () { Navigator.pop(context); _mostrarFormularioPago(socioId!); },
-                child: const Text("COBRAR MEMBRESÍA"),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _mostrarFormularioPago(socioId!);
+                },
+                child: const Text("cobrar membresia"),
               )
             ]
           ],
@@ -159,11 +197,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
             child: TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                Future.delayed(const Duration(milliseconds: 500), () {
-                  if (mounted) setState(() => isScanning = true);
-                });
+                setState(() => isScanning = true);
               },
-              child: const Text("CERRAR", style: TextStyle(color: Colors.white)),
+              child: const Text("cerrar", style: TextStyle(color: Colors.white)),
             ),
           )
         ],
@@ -174,7 +210,20 @@ class _ScannerScreenState extends State<ScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Recepción Gym"), centerTitle: true),
+      appBar: AppBar(
+        title: const Text("recepcion gym"),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.logout, color: Colors.redAccent),
+          onPressed: () => _logout(context),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen())),
+          )
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
@@ -182,8 +231,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             child: MobileScanner(
               controller: controller,
               onDetect: (capture) {
-                final List<Barcode> barcodes = capture.barcodes;
-                for (final barcode in barcodes) {
+                for (final barcode in capture.barcodes) {
                   if (isScanning && barcode.rawValue != null) validarAcceso(barcode.rawValue!);
                 }
               },
@@ -197,31 +245,21 @@ class _ScannerScreenState extends State<ScannerScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Accesos Recientes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text("accesos recientes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
                   Expanded(
                     child: ListView.builder(
                       itemCount: historialAccesos.length,
                       itemBuilder: (context, index) {
                         final acceso = historialAccesos[index];
-                        final bool exito = acceso['esExitoso'] ?? false;
-                        
-                        // Formateo seguro de fecha
-                        String hora = "00:00";
-                        try {
-                          DateTime dt = DateTime.parse(acceso['fechaHora']);
-                          hora = DateFormat('HH:mm').format(dt.toLocal());
-                        } catch (e) { hora = "--:--"; }
-
                         return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: exito ? Colors.green : Colors.red,
-                              child: Icon(exito ? Icons.check : Icons.close, color: Colors.white),
+                            leading: Icon(
+                              acceso['esExitoso'] == true ? Icons.check_circle : Icons.error, 
+                              color: acceso['esExitoso'] == true ? Colors.green : Colors.red
                             ),
-                            title: Text(acceso['nombreSocio'] ?? "Socio"),
-                            subtitle: Text("${acceso['mensajeSemaforo']} • $hora"),
+                            title: Text(acceso['nombreSocio'] ?? "socio"),
+                            subtitle: Text("${acceso['mensajeSemaforo']}"),
                           ),
                         );
                       },
