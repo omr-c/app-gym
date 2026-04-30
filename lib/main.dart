@@ -1,28 +1,37 @@
 import 'package:flutter/material.dart';
-// importamos la pantalla de registro que acabas de crear
-import 'features/socio/socio_registro_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
-void main() {
-  runApp(const MyApp());
+// importamos la nueva pantalla de login que crearemos abajo
+import 'features/auth/login_screen.dart'; 
+
+void main() async {
+  // es obligatorio asegurar que flutter este listo antes de llamar a firebase
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // inicializamos la conexion con tu proyecto de google
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  runApp(const GymApp());
 }
 
-// clase principal que arranca la aplicacion del gimnasio
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class GymApp extends StatelessWidget {
+  const GymApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'smart gym manager',
-      // quitamos la etiqueta roja de debug de la esquina
       debugShowCheckedModeBanner: false,
+      title: 'gym system unificado',
       theme: ThemeData(
-        // definimos un color base para la app
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
+        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
       ),
-      // configuramos tu pantalla de registro como la vista inicial
-      home: SocioRegistroScreen(),
+      // ahora el arranque es nuestra pantalla de login
+      home: const LoginScreen(),
     );
   }
 }

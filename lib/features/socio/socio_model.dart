@@ -3,48 +3,41 @@ class Socio {
   final String nombre;
   final String telefono;
   final String email;
-  final String? fotourl;
-  final String? qrtoken;
-  final String? bio;
-  final String? instagramurl;
-  final String? estado;
+  final String? qrToken;
+  final String estado; 
+  final String rol;
 
   Socio({
     this.id,
     required this.nombre,
     required this.telefono,
     required this.email,
-    this.fotourl,
-    this.qrtoken,
-    this.bio,
-    this.instagramurl,
-    this.estado,
+    this.qrToken,
+    // valores por defecto en minisculas[cite: 16]
+    this.estado = 'pendiente', 
+    this.rol = 'socio',
   });
 
-  // factory para crear un objeto socio desde el json que responde spring boot
-  factory Socio.fromjson(Map<String, dynamic> json) {
+  factory Socio.fromJson(Map<String, dynamic> json) {
     return Socio(
-      id: json['id'],
-      nombre: json['nombre'],
-      telefono: json['telefono'],
-      email: json['email'],
-      fotourl: json['fotoUrl'],
-      qrtoken: json['qrToken'],
-      bio: json['bio'],
-      instagramurl: json['instagramUrl'],
-      estado: json['estado'],
+      id: json['id']?.toString(),
+      nombre: json['nombre'] ?? '',
+      telefono: json['telefono'] ?? '',
+      email: json['email'] ?? '',
+      qrToken: json['qrToken']?.toString(),
+      // forzamos minisculas para que la comparacion sea exacta[cite: 16]
+      estado: (json['estado'] ?? 'pendiente').toString().toLowerCase(), 
+      rol: (json['rol'] ?? 'socio').toString().toLowerCase(),
     );
   }
 
-  // metodo para convertir el socio a json y enviarlo al backend
-  Map<String, dynamic> tojson() {
+  Map<String, dynamic> toJson() {
     return {
       'nombre': nombre,
       'telefono': telefono,
       'email': email,
-      'fotoUrl': fotourl,
-      'bio': bio,
-      'instagramUrl': instagramurl,
+      'estado': estado.toLowerCase(), 
+      'rol': rol.toLowerCase(),
     };
   }
 }
