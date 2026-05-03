@@ -55,8 +55,8 @@ class _SocioQrScreenState extends State<SocioQrScreen> {
     
     // Priorizamos el endpoint de perfil si ya tenemos el token para obtener días restantes
     final String url = _socioActual.qrToken != null 
-        ? "http://192.168.1.127:8080/api/socios/perfil/${_socioActual.qrToken}"
-        : "http://192.168.1.127:8080/api/auth/verificar/${_socioActual.email}";
+        ? "http://192.168.1.68:8080/api/socios/perfil/${_socioActual.qrToken}"
+        : "http://192.168.1.68:8080/api/auth/verificar/${_socioActual.email}";
 
     try {
       final response = await http.get(Uri.parse(url));
