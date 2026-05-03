@@ -6,6 +6,7 @@ class Socio {
   final String? qrToken;
   final String estado; 
   final String rol;
+  final int diasRestantes; // Nuevo campo calculado
 
   Socio({
     this.id,
@@ -13,9 +14,9 @@ class Socio {
     required this.telefono,
     required this.email,
     this.qrToken,
-    // valores por defecto en minisculas[cite: 16]
     this.estado = 'pendiente', 
     this.rol = 'socio',
+    this.diasRestantes = 0, // Por defecto 0
   });
 
   factory Socio.fromJson(Map<String, dynamic> json) {
@@ -25,9 +26,10 @@ class Socio {
       telefono: json['telefono'] ?? '',
       email: json['email'] ?? '',
       qrToken: json['qrToken']?.toString(),
-      // forzamos minisculas para que la comparacion sea exacta[cite: 16]
       estado: (json['estado'] ?? 'pendiente').toString().toLowerCase(), 
       rol: (json['rol'] ?? 'socio').toString().toLowerCase(),
+      // Mapeamos el campo que viene del backend[cite: 3]
+      diasRestantes: json['diasRestantes'] != null ? (json['diasRestantes'] as num).toInt() : 0,
     );
   }
 
@@ -38,6 +40,7 @@ class Socio {
       'email': email,
       'estado': estado.toLowerCase(), 
       'rol': rol.toLowerCase(),
+      // El backend calcula los días, pero lo incluimos por si acaso
     };
   }
 }
