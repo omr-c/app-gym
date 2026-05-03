@@ -15,7 +15,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   // IP corregida sin espacios
-  final String ip = "192.168.1.127";
+  final String ip = "192.168.1.68";
   Map<String, dynamic>? resumen;
   List<dynamic> datosGrafica = [];
   bool cargando = true;

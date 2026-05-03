@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (email == null) return;
     
     // Tu IP local para la conexión con el servidor de Spring Boot[cite: 1]
-    final String url = "http://192.168.1.127:8080/api/auth/verificar/$email";
+    final String url = "http://192.168.1.68:8080/api/auth/verificar/$email";
 
     try {
       final response = await http.get(Uri.parse(url));

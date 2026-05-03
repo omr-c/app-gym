@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-
 // importamos la nueva pantalla de login que crearemos abajo
 import 'features/auth/login_screen.dart'; 
 

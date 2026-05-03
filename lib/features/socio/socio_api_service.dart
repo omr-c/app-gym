@@ -4,7 +4,7 @@ import 'socio_model.dart';
 
 class SocioApiService {
   // nota: la ruta debe coincidir con el postmapping del backend
-  final String baseUrl = "http://192.168.1.127:8080/api/socios/registrar";
+  final String baseUrl = "http://192.168.1.68:8080/api/socios/registrar";
 
   Future<Socio?> registrarsocio(Socio socio) async {
     try {

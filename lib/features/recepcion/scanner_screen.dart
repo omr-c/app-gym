@@ -47,7 +47,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   Future<void> _cargarHistorial() async {
     try {
-      final response = await http.get(Uri.parse('http://192.168.1.127:8080/api/accesos/recientes'));
+      final response = await http.get(Uri.parse('http://192.168.1.68:8080/api/accesos/recientes'));
       if (response.statusCode == 200) {
         setState(() => historialAccesos = json.decode(response.body));
       }
