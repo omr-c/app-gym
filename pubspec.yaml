@@ -27,9 +27,13 @@ dependencies:
   fl_chart: ^1.2.0
   firebase_core: ^4.7.0
   firebase_auth: ^6.4.0
+<<<<<<< HEAD
   
   # CORRECCIÓN: Versión estable compatible con el código actual
   google_sign_in: 6.2.1
+=======
+  google_sign_in: 6.1.5
+>>>>>>> 38714620bf5d7942dc8855828e23a80c290aabe0
 
 dev_dependencies:
   flutter_test:

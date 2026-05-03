@@ -19,7 +19,7 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen> {
   bool isScanning = true;
   final MobileScannerController controller = MobileScannerController();
-  final String ip = "192.168.1.127";
+  final String ip = "192.168.1.68";
   List<dynamic> historialAccesos = [];
 
   @override
