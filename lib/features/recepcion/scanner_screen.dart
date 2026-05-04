@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -63,7 +62,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.1.127:8080/api/accesos/escanear/$qrData'),
+        Uri.parse('http://192.168.1.68:8080/api/accesos/escanear/$qrData'),
       );
 
       final Map<String, dynamic> data = json.decode(response.body);
@@ -146,7 +145,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
     Navigator.pop(context);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.1.127:8080/api/membresias/pagar'),
+        Uri.parse('http://192.168.1.68:8080/api/membresias/pagar'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "socioId": socioId,

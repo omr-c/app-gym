@@ -18,20 +18,17 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  
-  // CORRECCIÓN: Configuración de GoogleSignIn con scopes necesarios
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email'],
-  );
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email']);
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  
   bool _cargando = false;
+  bool _oscurecerContrasena = true;
 
+  // verifica el usuario contra el backend de spring boot
   Future<void> _verificarEnSpringBoot(String? email) async {
     if (email == null) return;
-    
-    // Tu IP local para la conexión con el servidor de Spring Boot[cite: 1]
     final String url = "http://192.168.1.68:8080/api/auth/verificar/$email";
 
     try {
@@ -39,11 +36,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (response.statusCode == 200) {
         final datos = json.decode(response.body);
+        datos['email'] = email;
         Socio socioCargado = Socio.fromJson(datos);
 
-        // Validación de roles para redirección[cite: 1]
         if (socioCargado.rol == 'admin' || socioCargado.rol == 'recepcion') {
-          debugPrint("Rol detectado: ${socioCargado.rol}. Redirigiendo a recepción.");
           if (mounted) {
             Navigator.pushReplacement(
               context, 
@@ -51,7 +47,6 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           }
         } else {
-          debugPrint("Rol detectado: socio. Redirigiendo a identidad digital.");
           if (mounted) {
             Navigator.pushReplacement(
               context, 
@@ -68,39 +63,48 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
-      _mostrarError("Error de conexión con el servidor: $e");
+      _mostrarMensaje("Error de conexión con el servidor", esError: true);
+    }
+  }
+
+  // funcion para enviar el correo de recuperacion de contrasena
+  Future<void> _recuperarContrasena() async {
+    String email = _emailController.text.trim();
+    
+    if (email.isEmpty) {
+      _mostrarMensaje("Por favor, escribe tu correo para enviarte el enlace", esError: true);
+      return;
+    }
+
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      _mostrarMensaje("Enlace de recuperación enviado a su correo");
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        _mostrarMensaje("No existe un usuario con ese correo", esError: true);
+      } else {
+        _mostrarMensaje("Error al enviar el correo: ${e.message}", esError: true);
+      }
     }
   }
 
   Future<void> _loginConGoogle() async {
     setState(() => _cargando = true);
     try {
-      // Iniciar flujo de Google Sign-In[cite: 1]
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
       if (googleUser == null) {
         setState(() => _cargando = false);
         return; 
       }
-
-      // Obtener tokens de autenticación[cite: 1]
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      
-      // Crear credencial para Firebase[cite: 1]
       final AuthCredential credencial = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken, 
         idToken: googleAuth.idToken,
       );
-
-      // Autenticar en Firebase[cite: 1]
       final UserCredential userCredential = await _auth.signInWithCredential(credencial);
-      
-      // Verificar usuario en el Backend de Java[cite: 1]
       await _verificarEnSpringBoot(userCredential.user?.email);
-      
     } catch (e) {
-      debugPrint("Error Google Sign-In: $e");
-      _mostrarError("Error al autenticar con Google");
+      _mostrarMensaje("Error al conectar con Google", esError: true);
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -115,16 +119,16 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text.trim(),
       );
       await _verificarEnSpringBoot(userCredential.user?.email);
-    } catch (e) {
-      _mostrarError("Correo o contraseña inválidos");
+    } on FirebaseAuthException catch (e) {
+      _mostrarMensaje("Credenciales incorrectas o usuario inexistente", esError: true);
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
   }
 
-  void _mostrarError(String mensaje) {
+  void _mostrarMensaje(String mensaje, {bool esError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje), backgroundColor: Colors.red)
+      SnackBar(content: Text(mensaje), backgroundColor: esError ? Colors.red : Colors.green)
     );
   }
 
@@ -138,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const Icon(Icons.fitness_center, size: 80, color: Colors.blueAccent),
               const SizedBox(height: 20),
-              const Text("SMART GYM", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+              const Text("Inicia Sesión", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
               const SizedBox(height: 40),
               TextField(
                 controller: _emailController, 
@@ -147,10 +151,27 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 15),
               TextField(
                 controller: _passwordController, 
-                decoration: const InputDecoration(labelText: "Contraseña", border: OutlineInputBorder()), 
-                obscureText: true
+                obscureText: _oscurecerContrasena,
+                decoration: InputDecoration(
+                  labelText: "Contraseña", 
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(_oscurecerContrasena ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () => setState(() => _oscurecerContrasena = !_oscurecerContrasena),
+                  )
+                )
               ),
-              const SizedBox(height: 25),
+              
+              // enlace de recuperacion de contrasena
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _recuperarContrasena,
+                  child: const Text("¿Olvidaste tu contraseña?", style: TextStyle(fontSize: 13))
+                ),
+              ),
+
+              const SizedBox(height: 10),
               if (_cargando) const CircularProgressIndicator()
               else ...[
                 SizedBox(
@@ -158,7 +179,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 50, 
                   child: ElevatedButton(onPressed: _loginConCorreo, child: const Text("Entrar"))
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context, 
+                      MaterialPageRoute(builder: (context) => const SocioRegistroScreen())
+                    );
+                  },
+                  child: const Text("¿No tienes cuenta? Regístrate aquí", style: TextStyle(color: Colors.blueAccent))
+                ),
+                const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity, 
                   height: 50, 
