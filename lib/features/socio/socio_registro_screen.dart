@@ -78,55 +78,20 @@ class _SocioRegistroScreenState extends State<SocioRegistroScreen> {
           );
         }
       }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        _mostrarMensaje(e.code == 'email-already-in-use' 
+            ? 'Este correo ya está registrado.' 
+            : 'Error en la cuenta: ${e.message}');
+      }
     } catch (e) {
       print("ERROR DETECTADO: $e");
-      // Si el usuario se creó en Firebase pero falló en Java, lo borramos para no dejar basura
+      // Si el usuario se creó en Firebase pero falló en el Backend, lo borramos para evitar inconsistencias
       if (user != null) {
         await user.delete();
       }
-      
       if (mounted) {
-        String mensajeError = e.toString().contains('already-in-use') 
-          ? 'Este correo ya está registrado.' 
-          : 'Error en el servidor. Intenta de nuevo.';
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(mensajeError)),
-        );
-
-        // 2. intentar registrar en spring boot (aqui se valida el telefono)
-        Socio? socioRegistrado = await _apiService.registrarsocio(nuevoSocio);
-        
-        if (socioRegistrado == null) {
-          // si el api devuelve null, probablemente el telefono o email ya existen
-          if (mounted) setState(() => _cargando = false);
-          _mostrarMensaje('El teléfono o correo ya están registrados en el gimnasio');
-          return;
-        }
-
-        // 3. si el backend acepto al socio, creamos la cuenta en firebase auth
-        if (widget.emailPrellenado == null) {
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-          );
-        }
-
-        if (mounted) {
-          setState(() => _cargando = false);
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => SocioQrScreen(socio: socioRegistrado))
-          );
-        }
-      } on FirebaseAuthException catch (e) {
-        if (mounted) setState(() => _cargando = false);
-        _mostrarMensaje(e.code == 'email-already-in-use' 
-            ? 'Este correo ya esta registrado' 
-            : 'Error en la cuenta: ${e.message}');
-      } catch (e) {
-        if (mounted) setState(() => _cargando = false);
-        _mostrarMensaje('Error inesperado durante el registro');
+        _mostrarMensaje('Error en el servidor: $e');
       }
     } finally {
       if (mounted) setState(() => _cargando = false);

@@ -123,10 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
         accessToken: googleAuth.accessToken, 
         idToken: googleAuth.idToken,
       );
-      final UserCredential userCredential = await _auth.signInWithCredential(credencial);
-
-      
-
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
       await _verificarEnSpringBoot(userCredential.user?.email);
     } catch (e) {
       debugPrint("Error Google Sign-In: $e");
