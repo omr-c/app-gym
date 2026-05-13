@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../auth/login_screen.dart';
+import '../admin/detalle_metrica_screen.dart'; // NUEVO IMPORT
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -14,12 +15,11 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // IP corregida sin espacios
   final String ip = "192.168.1.127";
   Map<String, dynamic>? resumen;
   List<dynamic> datosGrafica = [];
   bool cargando = true;
-  String rangoSeleccionado = 'semana'; 
+  String rangoSeleccionado = 'semana';
 
   @override
   void initState() {
@@ -27,39 +27,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _cargarDatosDashboard();
   }
 
-  Future<void> _logout(BuildContext context) async {
-    try {
-      // CORRECCIÓN: Usar constructor simple para compatibilidad con versión 6.2.1
-      await GoogleSignIn().signOut();
-      await FirebaseAuth.instance.signOut();
-      if (context.mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      debugPrint("error al salir: $e");
-    }
-  }
-
   Future<void> _cargarDatosDashboard() async {
     if (!mounted) return;
     setState(() => cargando = true);
 
     try {
-      final resResumen = await http.get(Uri.parse('http://$ip:8080/api/dashboard/resumen'));
-      final resGrafica = await http.get(Uri.parse('http://$ip:8080/api/dashboard/accesos?rango=$rangoSeleccionado'));
+      final urlResumen = Uri.parse("http://$ip:8080/api/admin/resumen-dashboard");
+      final urlGrafica = Uri.parse("http://$ip:8080/api/admin/estadisticas-accesos?rango=$rangoSeleccionado");
 
-      if (resResumen.statusCode == 200 && resGrafica.statusCode == 200) {
+      final respuestas = await Future.wait([
+        http.get(urlResumen).timeout(const Duration(seconds: 5)),
+        http.get(urlGrafica).timeout(const Duration(seconds: 5)),
+      ]);
+
+      if (respuestas[0].statusCode == 200 && respuestas[1].statusCode == 200) {
         setState(() {
-          resumen = json.decode(resResumen.body);
-          datosGrafica = json.decode(resGrafica.body);
+          resumen = jsonDecode(respuestas[0].body);
+          datosGrafica = jsonDecode(respuestas[1].body);
         });
       }
     } catch (e) {
-      debugPrint("error de conexion en dashboard: $e");
+      print("Error de conexión: $e");
+      resumen ??= {"totalSocios": 0, "sociosActivos": 0, "sociosVencidos": 0, "accesosHoy": 0};
     } finally {
       if (mounted) setState(() => cargando = false);
     }
@@ -68,134 +57,121 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text("estadisticas reales"),
+        backgroundColor: Colors.black,
+        elevation: 0,
+        title: const Text("GYM RATS ADMIN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarDatosDashboard),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            onPressed: () => _logout(context),
-          )
+            icon: const Icon(Icons.refresh, color: Colors.orange),
+            onPressed: _cargarDatosDashboard,
+          ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _cargarDatosDashboard,
-        child: cargando 
-          ? const Center(child: CircularProgressIndicator())
-          : (resumen == null) // Quitamos la restricción de datosGrafica.isEmpty para que al menos veas los cuadros
-              ? ListView(
-                  children: const [
-                    SizedBox(height: 100),
-                    Center(child: Text("no hay datos o hubo un error de conexion")),
-                  ],
-                )
-              : SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("resumen de membresias", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 15),
-                      Row(
-                        children: [
-                          _buildStatCard("activos", "${resumen?['totalSociosActivos'] ?? 0}", Colors.green, Icons.check_circle),
-                          const SizedBox(width: 10),
-                          _buildStatCard("deudores", "${resumen?['totalSociosPendientes'] ?? 0}", Colors.orange, Icons.timer),
-                        ],
-                      ),
-                      const SizedBox(height: 25),
-                      const Text("ingresos en caja", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 15),
-                      Row(
-                        children: [
-                          _buildStatCard("hoy", "\$${resumen?['ingresosHoy'] ?? 0}", Colors.blue, Icons.payments),
-                          const SizedBox(width: 10),
-                          _buildStatCard("semana", "\$${resumen?['ingresosSemana'] ?? 0}", Colors.indigo, Icons.account_balance),
-                        ],
-                      ),
-                      const SizedBox(height: 30),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("afluencia", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          DropdownButton<String>(
-                            value: rangoSeleccionado,
-                            items: const [
-                              DropdownMenuItem(value: 'semana', child: Text('esta semana')),
-                              DropdownMenuItem(value: 'mes', child: Text('este mes')),
-                              DropdownMenuItem(value: 'ano', child: Text('este año')),
-                            ],
-                            onChanged: (String? nuevoValor) {
-                              if (nuevoValor != null) {
-                                setState(() => rangoSeleccionado = nuevoValor);
-                                _cargarDatosDashboard();
-                              }
-                            },
-                          )
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      datosGrafica.isEmpty 
-                        ? const Center(child: Text("\nTodavía no hay accesos hoy"))
-                        : _buildGrafica(),
-                      const SizedBox(height: 50),
-                    ],
+      body: cargando 
+          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                children: [
+                  // Carrusel Horizontal
+                  SizedBox(
+                    height: 160,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 15),
+                      children: [ // Ahora _buildStatCard es interactivo
+                        _buildStatCard("SOCIOS", "${resumen?['totalSocios'] ?? 0}", Colors.blue, Icons.people, 'Socios'),
+                        _buildStatCard("ACTIVOS", "${resumen?['sociosActivos'] ?? 0}", Colors.green, Icons.check_circle, 'Activos'),
+                        _buildStatCard("VENCIDOS", "${resumen?['sociosVencidos'] ?? 0}", Colors.red, Icons.warning, 'Vencidos'),
+                        _buildStatCard("ACCESOS HOY", "${resumen?['accesosHoy'] ?? 0}", Colors.orange, Icons.qr_code_scanner, 'Accesos Hoy'),
+                      ],
+                    ),
                   ),
-                ),
-      ),
+                  const SizedBox(height: 30),
+                  // Gráfica
+                  const Text("FLUJO DE ENTRADAS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Container(
+                    height: 250,
+                    margin: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(25)),
+                    child: _buildChart(),
+                  ),
+                  _buildActionItem(Icons.person_add, "Registrar Socio", "Añadir nuevo miembro"),
+                ],
+              ),
+            ),
     );
   }
 
-  Widget _buildGrafica() {
-    return Container(
-      height: 280,
-      padding: const EdgeInsets.only(top: 20, right: 10),
-      child: BarChart(
-        BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          maxY: _getMaxY(),
-          barGroups: datosGrafica.asMap().entries.map((entry) {
-            return BarChartGroupData(
-              x: entry.key,
-              barRods: [
-                BarChartRodData(
-                  toY: (entry.value['conteoAccesos'] as num).toDouble(),
-                  color: Colors.blueAccent,
-                  width: rangoSeleccionado == 'mes' ? 6 : 18,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
-                )
-              ],
-            );
-          }).toList(),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 30,
-                getTitlesWidget: (val, meta) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 10))
-              ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                interval: 1,
-                getTitlesWidget: (value, meta) {
-                  int index = value.toInt();
-                  if (index >= 0 && index < datosGrafica.length) {
-                    return Text(datosGrafica[index]['fecha'].toString(), style: const TextStyle(fontSize: 9));
-                  }
-                  return const Text('');
-                },
-              ),
-            ),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  Widget _buildChart() {
+    if (datosGrafica.isEmpty) {
+      return const Center(child: Text("Sin datos registrados", style: TextStyle(color: Colors.white24)));
+    }
+    return BarChart(
+      BarChartData(
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (group) => Colors.blueGrey.withOpacity(0.9),
+            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+              return BarTooltipItem(
+                'Entradas: ${rod.toY.toInt()}',
+                const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              );
+            },
           ),
-          gridData: const FlGridData(show: false),
-          borderData: FlBorderData(show: false),
         ),
+        alignment: BarChartAlignment.spaceAround,
+        maxY: _getMaxY(),
+        barGroups: datosGrafica.asMap().entries.map((entry) {
+          return BarChartGroupData(
+            x: entry.key,
+            barRods: [
+              BarChartRodData(
+                toY: (entry.value['conteoAccesos'] as num).toDouble(),
+                color: Colors.orange,
+                width: 18,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+              )
+            ],
+          );
+        }).toList(),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                int i = value.toInt();
+                if (i >= 0 && i < datosGrafica.length) {
+                  return SideTitleWidget(
+                    meta: meta,
+                    space: 10,
+                    child: Text(
+                      datosGrafica[i]['etiqueta'].toString(), 
+                      style: const TextStyle(color: Colors.grey, fontSize: 10),
+                    ),
+                  );
+                }
+                return const Text("");
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 1.0, // Escala de pasos de 1 en 1
+              reservedSize: 30,
+              getTitlesWidget: (value, meta) => Text(value.toInt().toString(), 
+                style: const TextStyle(color: Colors.grey, fontSize: 10)),
+            ),
+          ),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
       ),
     );
   }
@@ -204,30 +180,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (datosGrafica.isEmpty) return 10;
     double max = 0;
     for (var item in datosGrafica) {
-      if ((item['conteoAccesos'] as num).toDouble() > max) max = (item['conteoAccesos'] as num).toDouble();
+      double val = (item['conteoAccesos'] as num).toDouble();
+      if (val > max) max = val;
     }
-    return max + 2;
+    return max == 0 ? 10 : max + 2;
   }
 
-  Widget _buildStatCard(String label, String value, Color color, IconData icon) {
-    return Expanded(
+  // Modificado _buildStatCard para ser interactivo
+  Widget _buildStatCard(String label, String value, Color color, IconData icon, String metricType) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DetalleMetricaScreen(
+              title: label,
+              metricType: metricType,
+              ip: ip, // Pasamos la IP a la nueva pantalla
+            ),
+          ),
+        );
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5))],
-          border: Border.all(color: color.withOpacity(0.3), width: 1),
-        ),
+        width: 150, margin: const EdgeInsets.only(right: 15), padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(25), border: Border.all(color: color.withOpacity(0.3))),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-            Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            const Spacer(),
+            Text(value, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+            Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildActionItem(IconData icon, String title, String subtitle) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(20)),
+      child: Row(children: [Icon(icon, color: Colors.orange), const SizedBox(width: 20), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12))])]),
     );
   }
 }

@@ -4,10 +4,11 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+// Asegúrate de que estas rutas sean correctas según tu estructura de carpetas
 import '../socio/socio_registro_screen.dart';
 import '../socio/socio_qr_screen.dart';
-import '../socio/socio_model.dart';
-import '../recepcion/scanner_screen.dart';
+import '../socio/socio_model.dart'; 
+import '../admin/admin_main_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,49 +27,85 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  
+  // Tu IP local configurada
+  final String ip = "192.168.1.127";
   bool _cargando = false;
 
   Future<void> _verificarEnSpringBoot(String? email) async {
     if (email == null) return;
     
-    // Tu IP local para la conexión con el servidor de Spring Boot[cite: 1]
-    final String url = "http://192.168.1.127:8080/api/auth/verificar/$email";
+    // Endpoint actualizado en tu Backend
+    final String url = "http://$ip:8080/api/socios/perfil-por-email?email=$email";
 
     try {
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
-        final datos = json.decode(response.body);
-        Socio socioCargado = Socio.fromJson(datos);
+        final Map<String, dynamic> jsonData = jsonDecode(response.body);
+        
+        // IMPORTANTE: Asegúrate de que tu clase en socio_model.dart se llame 'Socio'
+        // Si se llama 'SocioModel', cambia la siguiente línea a: final socioCargado = SocioModel.fromJson(jsonData);
+        final socioCargado = SocioModel.fromJson(jsonData);
 
-        // Validación de roles para redirección[cite: 1]
-        if (socioCargado.rol == 'admin' || socioCargado.rol == 'recepcion') {
-          debugPrint("Rol detectado: ${socioCargado.rol}. Redirigiendo a recepción.");
-          if (mounted) {
-            Navigator.pushReplacement(
-              context, 
-              MaterialPageRoute(builder: (context) => const ScannerScreen())
+        if (mounted) {
+          // Limpiamos el rol recibido para evitar errores de espacios o mayúsculas
+          String rol = socioCargado.rol.toLowerCase().trim();
+
+          // DEBUG para que veas en la consola qué está llegando realmente
+          print("DEBUG: Rol detectado -> '$rol'");
+
+          if (rol == 'admin' || rol == 'recepcion') {
+            // SI ES ADMIN -> Va al Dashboard Principal
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const AdminMainScreen()),
+              (route) => false,
             );
-          }
-        } else {
-          debugPrint("Rol detectado: socio. Redirigiendo a identidad digital.");
-          if (mounted) {
-            Navigator.pushReplacement(
-              context, 
-              MaterialPageRoute(builder: (context) => SocioQrScreen(socio: socioCargado))
+          } else {
+            // SI ES CLIENTE -> Va a su pantalla de QR
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => SocioQrScreen(socio: socioCargado)),
+              (route) => false,
             );
           }
         }
-      } else if (response.statusCode == 404) {
+      } else {
         if (mounted) {
-          Navigator.pushReplacement(
-            context, 
-            MaterialPageRoute(builder: (context) => SocioRegistroScreen(emailPrellenado: email))
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Usuario no encontrado en la base de datos del gimnasio")),
           );
         }
+        await _auth.signOut();
       }
     } catch (e) {
-      _mostrarError("Error de conexión con el servidor: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error de conexión: $e")),
+        );
+      }
+    }
+  }
+
+  Future<void> _loginConCorreo() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) return;
+    
+    setState(() => _cargando = true);
+    try {
+      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      await _verificarEnSpringBoot(userCredential.user?.email);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Correo o contraseña incorrectos")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 
@@ -80,96 +117,103 @@ class _LoginScreenState extends State<LoginScreen> {
       
       if (googleUser == null) {
         setState(() => _cargando = false);
-        return; 
+        return;
       }
 
       // Obtener tokens de autenticación[cite: 1]
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+<<<<<<< Updated upstream
       
       // Crear credencial para Firebase[cite: 1]
       final AuthCredential credencial = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken, 
-        idToken: googleAuth.idToken,
-      );
-
-      // Autenticar en Firebase[cite: 1]
-      final UserCredential userCredential = await _auth.signInWithCredential(credencial);
-      
-      // Verificar usuario en el Backend de Java[cite: 1]
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+>>>>>>> Stashed changes
       await _verificarEnSpringBoot(userCredential.user?.email);
       
     } catch (e) {
       debugPrint("Error Google Sign-In: $e");
       _mostrarError("Error al autenticar con Google");
+=======
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al iniciar sesión con Google")),
+        );
+      }
+>>>>>>> Stashed changes
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
   }
 
-  Future<void> _loginConCorreo() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) return;
-    setState(() => _cargando = true);
-    try {
-      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: _emailController.text.trim(), 
-        password: _passwordController.text.trim(),
-      );
-      await _verificarEnSpringBoot(userCredential.user?.email);
-    } catch (e) {
-      _mostrarError("Correo o contraseña inválidos");
-    } finally {
-      if (mounted) setState(() => _cargando = false);
-    }
-  }
-
-  void _mostrarError(String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje), backgroundColor: Colors.red)
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              const Icon(Icons.fitness_center, size: 80, color: Colors.blueAccent),
-              const SizedBox(height: 20),
-              const Text("SMART GYM", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+              const Icon(Icons.fitness_center, size: 90, color: Colors.orange),
+              const SizedBox(height: 10),
+              const Text(
+                "GYM SYSTEM",
+                style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 40),
               TextField(
-                controller: _emailController, 
-                decoration: const InputDecoration(labelText: "Correo", border: OutlineInputBorder())
+                controller: _emailController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Correo Electrónico",
+                  labelStyle: TextStyle(color: Colors.grey),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.orange, width: 2)),
+                ),
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 20),
               TextField(
-                controller: _passwordController, 
-                decoration: const InputDecoration(labelText: "Contraseña", border: OutlineInputBorder()), 
-                obscureText: true
+                controller: _passwordController,
+                obscureText: _oscurecerContrasena,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: "Contraseña",
+                  labelStyle: const TextStyle(color: Colors.grey),
+                  enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                  focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.orange, width: 2)),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _oscurecerContrasena ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () => setState(() => _oscurecerContrasena = !_oscurecerContrasena),
+                  ),
+                ),
               ),
-              const SizedBox(height: 25),
-              if (_cargando) const CircularProgressIndicator()
+              const SizedBox(height: 50),
+              if (_cargando)
+                const CircularProgressIndicator(color: Colors.orange)
               else ...[
                 SizedBox(
-                  width: double.infinity, 
-                  height: 50, 
-                  child: ElevatedButton(onPressed: _loginConCorreo, child: const Text("Entrar"))
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: _loginConCorreo,
+                    child: const Text("INICIAR SESIÓN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
                 ),
                 const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity, 
-                  height: 50, 
-                  child: OutlinedButton.icon(
-                    onPressed: _loginConGoogle,
-                    icon: Image.network(
-                      'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png', 
-                      height: 24
-                    ),
-                    label: const Text("Continuar con Google"),
-                  )
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white54),
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: _loginConGoogle,
+                  icon: const Icon(Icons.login, color: Colors.white),
+                  label: const Text("Continuar con Google", style: TextStyle(color: Colors.white)),
+                ),
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const SocioRegistroScreen()));
+                  },
+                  child: const Text("¿No tienes cuenta? Regístrate aquí", style: TextStyle(color: Colors.orangeAccent)),
                 ),
               ]
             ],
