@@ -31,6 +31,10 @@ dependencies:
   
   # CORRECCIÓN: Versión estable compatible con el código actual
   google_sign_in: 6.2.1
+  image_picker: ^1.2.2
+  supabase_flutter: ^2.12.4
+  shared_preferences: ^2.5.5
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:
