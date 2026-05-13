@@ -1,4 +1,4 @@
-class Socio {
+class SocioModel {
   final String? id;
   final String nombre;
   final String telefono;
@@ -6,41 +6,45 @@ class Socio {
   final String? qrToken;
   final String estado; 
   final String rol;
-  final int diasRestantes; // Nuevo campo calculado
+  final String fotoUrl; 
+  final int diasRestantes; 
 
-  Socio({
+  SocioModel({
     this.id,
     required this.nombre,
     required this.telefono,
     required this.email,
     this.qrToken,
-    this.estado = 'pendiente', 
+    this.estado = 'activo', 
     this.rol = 'socio',
-    this.diasRestantes = 0, // Por defecto 0
+    this.fotoUrl = '', 
+    this.diasRestantes = 0,
   });
 
-  factory Socio.fromJson(Map<String, dynamic> json) {
-    return Socio(
+  factory SocioModel.fromJson(Map<String, dynamic> json) {
+    return SocioModel(
       id: json['id']?.toString(),
       nombre: json['nombre'] ?? '',
       telefono: json['telefono'] ?? '',
       email: json['email'] ?? '',
       qrToken: json['qrToken']?.toString(),
-      estado: (json['estado'] ?? 'pendiente').toString().toLowerCase(), 
+      estado: (json['estado'] ?? 'activo').toString().toLowerCase(), 
       rol: (json['rol'] ?? 'socio').toString().toLowerCase(),
-      // Mapeamos el campo que viene del backend[cite: 3]
+      fotoUrl: json['fotoUrl'] ?? '',
       diasRestantes: json['diasRestantes'] != null ? (json['diasRestantes'] as num).toInt() : 0,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'nombre': nombre,
       'telefono': telefono,
       'email': email,
-      'estado': estado.toLowerCase(), 
-      'rol': rol.toLowerCase(),
-      // El backend calcula los días, pero lo incluimos por si acaso
+      'qrToken': qrToken,
+      'estado': estado,
+      'rol': rol,
+      'fotoUrl': fotoUrl,
     };
   }
 }

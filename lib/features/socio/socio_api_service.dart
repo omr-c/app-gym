@@ -3,39 +3,42 @@ import 'package:http/http.dart' as http;
 import 'socio_model.dart';
 
 class SocioApiService {
-  final String baseUrl = "http://192.168.1.68:8080/api/socios";
+  // Asegúrate de que esta IP sea la misma que usas en el Login y Dashboard
+  final String baseUrl = "http://192.168.1.127:8080/api/socios";
 
-  // Registro (lo que ya tenías)
-  Future<Socio?> registrarsocio(Socio socio) async {
+  // --- EL MÉTODO QUE TE FALTABA ---
+  Future<SocioModel> registrarSocio(SocioModel socio) async {
+    final url = Uri.parse("$baseUrl/registrar");
+    
     try {
       final response = await http.post(
-        Uri.parse("$baseUrl/registrar"),
-        headers: {"Content-Type": "application/json"},
+        url,
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(socio.toJson()),
-      );
+      ).timeout(const Duration(seconds: 10));
+
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return Socio.fromJson(jsonDecode(response.body));
+        final dynamic jsonData = jsonDecode(response.body);
+        return SocioModel.fromJson(jsonData);
+      } else {
+        // Leemos el error que viene de Spring Boot (ej. "El teléfono ya existe")
+        final errorBody = jsonDecode(response.body);
+        throw Exception(errorBody['message'] ?? 'Error al registrar socio en el servidor');
       }
-      return null;
     } catch (e) {
-      return null;
+      print("Error en registrarSocio: $e");
+      rethrow; // Reenviamos el error para que la pantalla de registro lo atrape
     }
   }
 
-  // NUEVO: Obtener perfil completo con días restantes[cite: 3]
-  Future<Socio?> obtenerPerfil(String qrToken) async {
-    try {
-      final response = await http.get(
-        Uri.parse("$baseUrl/perfil/$qrToken"),
-        headers: {"Content-Type": "application/json"},
-      );
-
-      if (response.statusCode == 200) {
-        return Socio.fromJson(jsonDecode(response.body));
-      }
-      return null;
-    } catch (e) {
-      return null;
+  // Otros métodos que podrías tener...
+  Future<List<SocioModel>> getAllSocios() async {
+    final response = await http.get(Uri.parse("$baseUrl/all"));
+    if (response.statusCode == 200) {
+      List<dynamic> body = jsonDecode(response.body);
+      return body.map((dynamic item) => SocioModel.fromJson(item)).toList();
+    } else {
+      throw Exception("Fallo al cargar socios");
     }
   }
 }
